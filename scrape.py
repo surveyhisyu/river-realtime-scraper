@@ -13,8 +13,8 @@ requestsのみで完結する。水位(DspWaterData.exe)・雨量(DspRainData.ex
  2. ページ内から .dat へのダウンロードリンクを抽出
  3. .dat を取得し、Shift-JISでデコード
  4. 日付・時刻・値の行を抽出(未観測 "-" の行は除外)
- 5. data/{station}-{週の月曜日の日付}.csv に追記。既存の日時と重複する行は追加しない
-    (例: 2026/8/31(月)〜9/6(日)のデータは nishisato-2026-08-31.csv にまとまる)
+ 5. data/{station}/{station}-{週の月曜日の日付}.csv に追記。既存の日時と重複する行は追加しない
+    (例: 2026/8/31(月)〜9/6(日)のデータは data/nishisato/nishisato-2026-08-31.csv にまとまる)
 """
 
 import csv
@@ -196,10 +196,10 @@ def append_rows(station_name: str, value_col: str, rows):
         week_key = week_start.strftime("%Y-%m-%d")
         by_week.setdefault(week_key, []).append((dt, value))
 
-    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(os.path.join(DATA_DIR, station_name), exist_ok=True)
 
     for week_key, week_rows in by_week.items():
-        csv_path = os.path.join(DATA_DIR, f"{station_name}-{week_key}.csv")
+        csv_path = os.path.join(DATA_DIR, station_name, f"{station_name}-{week_key}.csv")
         existing = load_existing_datetimes(csv_path)
         is_new_file = not os.path.exists(csv_path)
 
