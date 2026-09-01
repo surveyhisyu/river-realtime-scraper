@@ -12,7 +12,8 @@ requestsのみで完結する。
  2. ページ内から .dat へのダウンロードリンクを抽出
  3. .dat を取得し、Shift-JISでデコード
  4. 日付・時刻・水位(m)の行を抽出(未観測 "-" の行は除外)
- 5. data/YYYY-MM.csv に追記。既存の日時と重複する行は追加しない
+ 5. data/{station}-{週の月曜日の日付}.csv に追記。既存の日時と重複する行は追加しない
+    (例: 2026/8/31(月)〜9/6(日)のデータは nishisato-2026-08-31.csv にまとまる)
 """
 
 import csv
@@ -123,21 +124,23 @@ def append_rows(rows):
         print("新規データなし")
         return
 
-    by_month = {}
+    by_week = {}
     for dt, value in rows:
-        month_key = dt.strftime("%Y-%m")
-        by_month.setdefault(month_key, []).append((dt, value))
+        # その日付が属する週の月曜日(週の開始日)を求める
+        week_start = (dt - datetime.timedelta(days=dt.weekday())).date()
+        week_key = week_start.strftime("%Y-%m-%d")
+        by_week.setdefault(week_key, []).append((dt, value))
 
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    for month_key, month_rows in by_month.items():
-        csv_path = os.path.join(DATA_DIR, f"{STATION_NAME}-{month_key}.csv")
+    for week_key, week_rows in by_week.items():
+        csv_path = os.path.join(DATA_DIR, f"{STATION_NAME}-{week_key}.csv")
         existing = load_existing_datetimes(csv_path)
         is_new_file = not os.path.exists(csv_path)
 
         new_rows = [
             (dt, value)
-            for dt, value in month_rows
+            for dt, value in week_rows
             if dt.strftime("%Y-%m-%d %H:%M") not in existing
         ]
 
