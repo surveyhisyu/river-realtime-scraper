@@ -1,17 +1,18 @@
 """
-国土交通省 水文水質データベース(www1.river.go.jp)の
-「リアルタイム10分水位一覧表」ページから、観測所の10分水位データを取得し、
-月ごとのCSVファイルに追記(重複排除)するスクリプト。
+国土交通省 水文水質データベース(www1.river.go.jp)から、
+複数の観測所(水位・雨量)の10分値データを取得し、
+観測所ごと・週単位(月曜始まり)のCSVファイルに追記(重複排除)するスクリプト。
 
-対象ページは静的HTMLで、ページ内の「CSVダウンロード」画像リンクの先に
+対象ページはいずれも静的HTMLで、ページ内の「CSVダウンロード」画像リンクの先に
 直接データファイル(.dat, Shift-JIS)があるため、Playwright等のブラウザ操作は不要。
-requestsのみで完結する。
+requestsのみで完結する。水位(DspWaterData.exe)・雨量(DspRainData.exe)のどちらも
+同じ.dat形式(日付,時刻,値,フラグ)なので、同じロジックで処理できる。
 
-流れ:
- 1. SOURCE_URL(観測所の一覧ページ)を取得
+流れ(観測所ごとに):
+ 1. url(観測所の一覧ページ)を取得
  2. ページ内から .dat へのダウンロードリンクを抽出
  3. .dat を取得し、Shift-JISでデコード
- 4. 日付・時刻・水位(m)の行を抽出(未観測 "-" の行は除外)
+ 4. 日付・時刻・値の行を抽出(未観測 "-" の行は除外)
  5. data/{station}-{週の月曜日の日付}.csv に追記。既存の日時と重複する行は追加しない
     (例: 2026/8/31(月)〜9/6(日)のデータは nishisato-2026-08-31.csv にまとまる)
 """
@@ -26,20 +27,84 @@ from zoneinfo import ZoneInfo
 import requests
 from bs4 import BeautifulSoup
 
-# 観測所: 西里橋(ID=304081284418020)
-SOURCE_URL = "https://www1.river.go.jp/cgi-bin/DspWaterData.exe?KIND=9&ID=304081284418020"
-STATION_NAME = "nishisato"  # ファイル名等に使う識別子
-DATA_DIR = "data"
 JST = ZoneInfo("Asia/Tokyo")
+DATA_DIR = "data"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; river-realtime-scraper/1.0)"
 }
 
+# 観測所一覧
+# name: ファイル名等に使う識別子(英数字)
+# url: 観測所の一覧ページURL
+# value_col: CSVの値列の見出し名
+STATIONS = [
+    {
+        "name": "nishisato",
+        "url": "https://www1.river.go.jp/cgi-bin/DspWaterData.exe?KIND=9&ID=304081284418020",
+        "value_col": "water_level_m",
+    },
+    {
+        "name": "sugoroku",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104031284420040",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "hidarimata",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418010",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "shiraidezawa",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408070",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "nishiho",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104031284417040",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "nakao",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418020",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "tochio",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418030",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "odana",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418140",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "hirayu",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418110",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "shimosadani",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408060",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "kanakido",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418160",
+        "value_col": "rain_mm_10min",
+    },
+    {
+        "name": "hongo",
+        "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408080",
+        "value_col": "rain_mm_10min",
+    },
+]
 
-def fetch_dat_url() -> str:
+
+def fetch_dat_url(source_url: str) -> str:
     """観測所ページから.datダウンロードリンクの絶対URLを取得する"""
-    res = requests.get(SOURCE_URL, headers=HEADERS, timeout=30)
+    res = requests.get(source_url, headers=HEADERS, timeout=30)
     res.raise_for_status()
     # このページ自体もShift-JISで配信されている
     res.encoding = "shift_jis"
@@ -60,7 +125,7 @@ def fetch_dat_url() -> str:
     if dat_link is None:
         raise RuntimeError("ページ内に.datへのダウンロードリンクが見つかりませんでした")
 
-    return requests.compat.urljoin(SOURCE_URL, dat_link)
+    return requests.compat.urljoin(source_url, dat_link)
 
 
 def fetch_dat_rows(dat_url: str):
@@ -119,9 +184,9 @@ def load_existing_datetimes(csv_path: str):
     return existing
 
 
-def append_rows(rows):
+def append_rows(station_name: str, value_col: str, rows):
     if not rows:
-        print("新規データなし")
+        print(f"[{station_name}] 新規データなし")
         return
 
     by_week = {}
@@ -134,7 +199,7 @@ def append_rows(rows):
     os.makedirs(DATA_DIR, exist_ok=True)
 
     for week_key, week_rows in by_week.items():
-        csv_path = os.path.join(DATA_DIR, f"{STATION_NAME}-{week_key}.csv")
+        csv_path = os.path.join(DATA_DIR, f"{station_name}-{week_key}.csv")
         existing = load_existing_datetimes(csv_path)
         is_new_file = not os.path.exists(csv_path)
 
@@ -150,20 +215,27 @@ def append_rows(rows):
         with open(csv_path, "a", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f)
             if is_new_file:
-                writer.writerow(["datetime", "water_level_m"])
+                writer.writerow(["datetime", value_col])
             for dt, value in sorted(new_rows):
                 writer.writerow([dt.strftime("%Y-%m-%d %H:%M"), value])
 
-        print(f"{csv_path}: {len(new_rows)}件追加")
+        print(f"[{station_name}] {csv_path}: {len(new_rows)}件追加")
 
 
 def main():
-    try:
-        dat_url = fetch_dat_url()
-        rows = fetch_dat_rows(dat_url)
-        append_rows(rows)
-    except Exception as e:
-        print(f"エラー: {e}", file=sys.stderr)
+    had_error = False
+    for station in STATIONS:
+        name = station["name"]
+        try:
+            dat_url = fetch_dat_url(station["url"])
+            rows = fetch_dat_rows(dat_url)
+            append_rows(name, station["value_col"], rows)
+        except Exception as e:
+            had_error = True
+            print(f"[{name}] エラー: {e}", file=sys.stderr)
+            # 1地点失敗しても他の地点は続行する
+
+    if had_error:
         sys.exit(1)
 
 
