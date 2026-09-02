@@ -33,4 +33,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           git diff --cached --quiet || git commit -m "Update river data ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
+          git pull --rebase origin main
           git push
