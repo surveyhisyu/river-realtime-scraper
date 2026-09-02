@@ -35,67 +35,67 @@ HEADERS = {
 }
 
 # 観測所一覧
-# name: ファイル名等に使う識別子(英数字)
+# name: フォルダ名・ファイル名に使う識別子(観測所名の漢字表記)
 # url: 観測所の一覧ページURL
 # value_col: CSVの値列の見出し名
 STATIONS = [
     {
-        "name": "nishisato",
+        "name": "西里橋",
         "url": "https://www1.river.go.jp/cgi-bin/DspWaterData.exe?KIND=9&ID=304081284418020",
         "value_col": "water_level_m",
     },
     {
-        "name": "sugoroku",
+        "name": "双六岳",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104031284420040",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "hidarimata",
+        "name": "左俣谷",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418010",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "shiraidezawa",
+        "name": "白出沢",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408070",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "nishiho",
+        "name": "西穂",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104031284417040",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "nakao",
+        "name": "中尾",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418020",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "tochio",
+        "name": "栃尾",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418030",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "odana",
+        "name": "大棚",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418140",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "hirayu",
+        "name": "平湯",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418110",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "shimosadani",
+        "name": "下佐谷",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408060",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "kanakido",
+        "name": "金木戸",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284418160",
         "value_col": "rain_mm_10min",
     },
     {
-        "name": "hongo",
+        "name": "本郷",
         "url": "https://www1.river.go.jp/cgi-bin/DspRainData.exe?KIND=9&ID=104081284408080",
         "value_col": "rain_mm_10min",
     },
