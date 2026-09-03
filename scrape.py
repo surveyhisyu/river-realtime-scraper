@@ -12,8 +12,11 @@ requestsのみで完結する。水位(DspWaterData.exe)・雨量(DspRainData.ex
  1. url(観測所の一覧ページ)を取得
  2. ページ内から .dat へのダウンロードリンクを抽出
  3. .dat を取得し、Shift-JISでデコード
- 4. 日付・時刻・値の行を抽出(未観測 "-" の行は除外)
- 5. data/{station}/{station}-{週の月曜日の日付}.csv に追記。既存の日時と重複する行は追加しない
+ 4. 日付・時刻・値の行を抽出。未来の時刻や、公開ラグで反映待ちの可能性が高い
+    直近の欠測は保留し、それ以外の欠測は値を空欄として扱う
+ 5. data/{station}/{station}-{週の月曜日の日付}.csv にマージする。
+    新規の日時は追加し、既存が空欄で今回実測値が取れた場合は上書きして埋める
+    (既にある実測値を上書きすることはない)
     (例: 2026/8/31(月)〜9/6(日)のデータは data/nishisato/nishisato-2026-08-31.csv にまとまる)
 """
 
@@ -29,6 +32,8 @@ from bs4 import BeautifulSoup
 
 JST = ZoneInfo("Asia/Tokyo")
 DATA_DIR = "data"
+# サイト側の公開ラグを考慮し、直近この時間以内の欠測は「反映待ち」とみなして記録を保留する
+PUBLISH_LAG_BUFFER = datetime.timedelta(minutes=20)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; river-realtime-scraper/1.0)"
@@ -169,8 +174,13 @@ def fetch_dat_rows(dat_url: str):
             if value is not None and value <= -90:
                 value = None  # "-99.999" 等、閉局・欠測を示す特殊な数値コード
 
-        if dt > datetime.datetime.now(JST):
-            continue  # まだ観測されていない未来の時刻は記録しない
+        now = datetime.datetime.now(JST)
+        if dt > now:
+            continue  # まだ観測時刻に達していない未来の時刻は記録しない
+        if value is None and dt > now - PUBLISH_LAG_BUFFER:
+            # サイト側の公開ラグで、まだ反映されていないだけの可能性が高い時間帯。
+            # 本当に欠測かどうかまだ判断できないので、今回は記録せず次回に持ち越す。
+            continue
 
         rows.append((dt, value))
 
@@ -179,19 +189,20 @@ def fetch_dat_rows(dat_url: str):
     return rows
 
 
-def load_existing_datetimes(csv_path: str):
-    existing = set()
+def load_existing_rows(csv_path: str):
+    """既存CSVを {日時文字列: 値文字列(空欄含む)} の辞書として読み込む。挿入順を維持する。"""
+    existing = {}
     if os.path.exists(csv_path):
         with open(csv_path, newline="", encoding="utf-8-sig") as f:
             reader = csv.reader(f)
             next(reader, None)  # header
             for row in reader:
                 if row:
-                    existing.add(row[0])
+                    existing[row[0]] = row[1] if len(row) > 1 else ""
     return existing
 
 
-def append_rows(station_name: str, value_col: str, rows):
+def merge_rows(station_name: str, value_col: str, rows):
     if not rows:
         print(f"[{station_name}] 新規データなし")
         return
@@ -207,26 +218,38 @@ def append_rows(station_name: str, value_col: str, rows):
 
     for week_key, week_rows in by_week.items():
         csv_path = os.path.join(DATA_DIR, station_name, f"{station_name}-{week_key}.csv")
-        existing = load_existing_datetimes(csv_path)
-        is_new_file = not os.path.exists(csv_path)
+        existing = load_existing_rows(csv_path)
+        before_count = len(existing)
+        filled_count = 0
+        added_count = 0
 
-        new_rows = [
-            (dt, value)
-            for dt, value in week_rows
-            if dt.strftime("%Y-%m-%d %H:%M") not in existing
-        ]
+        for dt, value in week_rows:
+            dt_key = dt.strftime("%Y-%m-%d %H:%M")
+            new_value_str = "" if value is None else str(value)
 
-        if not new_rows and not is_new_file:
+            if dt_key not in existing:
+                existing[dt_key] = new_value_str
+                added_count += 1
+            elif existing[dt_key] == "" and new_value_str != "":
+                # 既存が空欄で、今回は実測値が取れた → 上書きして埋める
+                existing[dt_key] = new_value_str
+                filled_count += 1
+            # それ以外(既存に既に実測値がある場合)は上書きしない
+
+        if not existing:
             continue
 
-        with open(csv_path, "a", newline="", encoding="utf-8-sig") as f:
+        with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f)
-            if is_new_file:
-                writer.writerow(["datetime", value_col])
-            for dt, value in sorted(new_rows, key=lambda r: r[0]):
-                writer.writerow([dt.strftime("%Y-%m-%d %H:%M"), "" if value is None else value])
+            writer.writerow(["datetime", value_col])
+            for dt_key in sorted(existing.keys()):
+                writer.writerow([dt_key, existing[dt_key]])
 
-        print(f"[{station_name}] {csv_path}: {len(new_rows)}件追加")
+        if added_count or filled_count or before_count == 0:
+            print(
+                f"[{station_name}] {csv_path}: 新規{added_count}件追加"
+                f"{f', 空欄→実測値に更新{filled_count}件' if filled_count else ''}"
+            )
 
 
 def main():
@@ -236,7 +259,7 @@ def main():
         try:
             dat_url = fetch_dat_url(station["url"])
             rows = fetch_dat_rows(dat_url)
-            append_rows(name, station["value_col"], rows)
+            merge_rows(name, station["value_col"], rows)
         except Exception as e:
             had_error = True
             print(f"[{name}] エラー: {e}", file=sys.stderr)
