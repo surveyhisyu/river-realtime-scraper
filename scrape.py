@@ -146,9 +146,6 @@ def fetch_dat_rows(dat_url: str):
         time_str = parts[1].strip()
         value_str = parts[2].strip()
 
-        if value_str in ("-", "", "*", "$"):
-            continue  # 未観測・欠測はスキップ
-
         # "24:00" のような表記に対応(翌日の00:00として扱う)
         try:
             hh, mm = time_str.split(":")
@@ -162,12 +159,19 @@ def fetch_dat_rows(dat_url: str):
         except ValueError:
             continue
 
-        try:
-            value = float(value_str)
-        except ValueError:
-            continue
+        # 欠測・閉局は行自体は残し、値だけ空欄(None)にする
+        value = None
+        if value_str not in ("-", "", "*", "$"):
+            try:
+                value = float(value_str)
+            except ValueError:
+                value = None
+            if value is not None and value <= -90:
+                value = None  # "-99.999" 等、閉局・欠測を示す特殊な数値コード
 
         rows.append((dt, value))
+
+    return rows
 
     return rows
 
@@ -216,8 +220,8 @@ def append_rows(station_name: str, value_col: str, rows):
             writer = csv.writer(f)
             if is_new_file:
                 writer.writerow(["datetime", value_col])
-            for dt, value in sorted(new_rows):
-                writer.writerow([dt.strftime("%Y-%m-%d %H:%M"), value])
+            for dt, value in sorted(new_rows, key=lambda r: r[0]):
+                writer.writerow([dt.strftime("%Y-%m-%d %H:%M"), "" if value is None else value])
 
         print(f"[{station_name}] {csv_path}: {len(new_rows)}件追加")
 
