@@ -169,6 +169,9 @@ def fetch_dat_rows(dat_url: str):
             if value is not None and value <= -90:
                 value = None  # "-99.999" 等、閉局・欠測を示す特殊な数値コード
 
+        if dt > datetime.datetime.now(JST):
+            continue  # まだ観測されていない未来の時刻は記録しない
+
         rows.append((dt, value))
 
     return rows
