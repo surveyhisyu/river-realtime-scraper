@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>神通川水系 観測データ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #0f2438;
+    --ink-soft: #4a6178;
+    --paper: #f3f7fa;
+    --card: #ffffff;
+    --line: #d9e3ea;
+    --water: #1c5d8c;
+    --water-soft: #e4eef6;
+    --rain: #2b8fa3;
+    --rain-soft: #e3f2f4;
+    --warn: #b5502f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    padding: 40px 24px 28px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  header h1 {
+    font-size: 1.7rem;
+    margin: 0 0 6px;
+    letter-spacing: 0.02em;
+  }
+  header p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    max-width: 60ch;
+  }
+  .controls {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .controls label {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+  }
+  .controls select {
+    font-size: 0.95rem;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--ink);
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 8px 24px 60px;
+  }
+  section.group {
+    margin-top: 36px;
+  }
+  section.group h2 {
+    font-size: 1.05rem;
+    margin: 0 0 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  section.group .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .group--water .dot { background: var(--water); }
+  .group--rain .dot { background: var(--rain); }
+  section.group .desc {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .group--water .card { border-top: 3px solid var(--water); }
+  .group--rain .card { border-top: 3px solid var(--rain); }
+  .card h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .card .latest {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 2px 0 2px;
+  }
+  .card .latest .unit {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-left: 4px;
+  }
+  .card .latest-time {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .card canvas {
+    width: 100% !important;
+    height: 150px !important;
+  }
+  .card .status {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    padding: 30px 0;
+    text-align: center;
+  }
+  .card .status.error { color: var(--warn); }
+  .card .foot {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .card .foot button {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+  .card .foot button:hover {
+    border-color: var(--ink-soft);
+    color: var(--ink);
+  }
+  footer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 40px;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+  footer a { color: var(--water); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>神通川水系 観測データ</h1>
+  <p>川の防災情報・水文水質データベース(国土交通省)から10分間隔で取得している水位・雨量の記録です。週ごとに切り替えて表示できます。</p>
+</header>
+
+<div class="controls">
+  <label for="week-select">表示する週</label>
+  <select id="week-select"></select>
+</div>
+
+<main>
+  <section class="group group--water">
+    <h2><span class="dot"></span>水位</h2>
+    <p class="desc">高原川・西里橋の観測所</p>
+    <div class="cards" id="water-cards"></div>
+  </section>
+
+  <section class="group group--rain">
+    <h2><span class="dot"></span>雨量</h2>
+    <p class="desc">神通川水系砂防事務所管内の観測所(★は山間部・冬季閉鎖あり)</p>
+    <div class="cards" id="rain-cards"></div>
+  </section>
+</main>
+
+<footer>
+  データ出典: <a href="https://www1.river.go.jp/" target="_blank" rel="noopener">水文水質データベース(国土交通省)</a>。
+  このページはGitHub Actionsで定期取得したCSVを表示しているだけの個人用ツールです。
+</footer>
+
+<script>
+const REPO_RAW_BASE = "https://raw.githubusercontent.com/surveyhisyu/river-realtime-scraper/main/data";
+
+const STATIONS = [
+  { name: "西里橋",   kind: "water", unit: "m",       closesInWinter: false },
+  { name: "双六岳",   kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "左俣谷",   kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "白出沢",   kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "西穂",     kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "中尾",     kind: "rain",  unit: "mm/10分", closesInWinter: false },
+  { name: "栃尾",     kind: "rain",  unit: "mm/10分", closesInWinter: false },
+  { name: "大棚",     kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "平湯",     kind: "rain",  unit: "mm/10分", closesInWinter: false },
+  { name: "下佐谷",   kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "金木戸",   kind: "rain",  unit: "mm/10分", closesInWinter: true  },
+  { name: "本郷",     kind: "rain",  unit: "mm/10分", closesInWinter: false },
+];
+
+// --- 週(月曜始まり)の一覧を作る ---
+function mondayOf(d) {
+  const date = new Date(d);
+  const day = date.getDay(); // 0=日
+  const diff = (day === 0 ? -6 : 1) - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+function fmtDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function weekLabel(mondayStr) {
+  const start = new Date(mondayStr + "T00:00:00");
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const f = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${f(start)}〜${f(end)}(${mondayStr}週)`;
+}
+
+const WEEKS_TO_SHOW = 10;
+const thisMonday = mondayOf(new Date());
+const weekKeys = [];
+for (let i = 0; i < WEEKS_TO_SHOW; i++) {
+  const d = new Date(thisMonday);
+  d.setDate(d.getDate() - 7 * i);
+  weekKeys.push(fmtDate(d));
+}
+
+const weekSelect = document.getElementById("week-select");
+weekKeys.forEach((wk) => {
+  const opt = document.createElement("option");
+  opt.value = wk;
+  opt.textContent = weekLabel(wk);
+  weekSelect.appendChild(opt);
+});
+
+// --- カードを組み立てる ---
+function buildCard(station) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <h3>${station.name}${station.closesInWinter ? " ★" : ""}</h3>
+    <div class="latest">— <span class="unit">${station.unit}</span></div>
+    <div class="latest-time">&nbsp;</div>
+    <div class="chart-wrap"><canvas></canvas></div>
+    <div class="foot"><button type="button">CSVをダウンロード</button></div>
+  `;
+  const ctx = card.querySelector("canvas").getContext("2d");
+  const color = station.kind === "water" ? "#1c5d8c" : "#2b8fa3";
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: { labels: [], datasets: [{
+      data: [],
+      borderColor: color,
+      backgroundColor: color + "22",
+      borderWidth: 1.5,
+      pointRadius: 0,
+      spanGaps: false,
+      tension: 0.15,
+      fill: station.kind === "water",
+    }]},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 6, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { font: { size: 10 } }, grid: { color: "#eef2f5" } },
+      },
+    },
+  });
+
+  card._chart = chart;
+  card._latestEl = card.querySelector(".latest");
+  card._latestTimeEl = card.querySelector(".latest-time");
+  card._downloadBtn = card.querySelector(".foot button");
+  return card;
+}
+
+const cards = {};
+const waterWrap = document.getElementById("water-cards");
+const rainWrap = document.getElementById("rain-cards");
+STATIONS.forEach((st) => {
+  const card = buildCard(st);
+  (st.kind === "water" ? waterWrap : rainWrap).appendChild(card);
+  cards[st.name] = card;
+});
+
+// --- CSV取得・パース ---
+function parseCsv(text) {
+  const clean = text.replace(/^\uFEFF/, "");
+  const lines = clean.split(/\r?\n/).filter((l) => l.length > 0);
+  lines.shift(); // header
+  const labels = [];
+  const values = [];
+  for (const line of lines) {
+    const [dt, val] = line.split(",");
+    if (!dt) continue;
+    labels.push(dt.slice(5)); // "MM-DD HH:MM"
+    values.push(val === undefined || val === "" ? null : Number(val));
+  }
+  return { labels, values, rawText: clean };
+}
+
+async function loadStation(station, weekKey) {
+  const card = cards[station.name];
+  const encoded = encodeURIComponent(station.name);
+  const url = `${REPO_RAW_BASE}/${encoded}/${encoded}-${weekKey}.csv`;
+
+  card._chart.data.labels = [];
+  card._chart.data.datasets[0].data = [];
+  card._chart.update();
+  card._latestEl.innerHTML = `— <span class="unit">${station.unit}</span>`;
+  card._latestTimeEl.textContent = "読み込み中…";
+  card._downloadBtn.disabled = true;
+  card._downloadBtn.onclick = null;
+
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("no-data");
+    const text = await res.text();
+    const { labels, values, rawText } = parseCsv(text);
+
+    card._chart.data.labels = labels;
+    card._chart.data.datasets[0].data = values;
+    card._chart.update();
+
+    let lastIdx = -1;
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (values[i] !== null) { lastIdx = i; break; }
+    }
+    if (lastIdx >= 0) {
+      card._latestEl.innerHTML = `${values[lastIdx]} <span class="unit">${station.unit}</span>`;
+      card._latestTimeEl.textContent = `${labels[lastIdx]} 時点`;
+    } else {
+      card._latestEl.innerHTML = `— <span class="unit">${station.unit}</span>`;
+      card._latestTimeEl.textContent = "この週はデータなし";
+    }
+
+    card._downloadBtn.disabled = false;
+    card._downloadBtn.onclick = () => {
+      const blob = new Blob([rawText], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${station.name}-${weekKey}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    };
+  } catch (e) {
+    card._latestTimeEl.textContent = "この週のデータはありません";
+  }
+}
+
+function loadAll() {
+  const weekKey = weekSelect.value;
+  STATIONS.forEach((st) => loadStation(st, weekKey));
+}
+
+weekSelect.addEventListener("change", loadAll);
+loadAll();
+</script>
+</body>
+</html>
