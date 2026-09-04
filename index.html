@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>神通川水系 観測データ</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
 <style>
   :root {
     --ink: #0f2438;
@@ -302,9 +302,17 @@ const cards = {};
 const waterWrap = document.getElementById("water-cards");
 const rainWrap = document.getElementById("rain-cards");
 STATIONS.forEach((st) => {
-  const card = buildCard(st);
-  (st.kind === "water" ? waterWrap : rainWrap).appendChild(card);
-  cards[st.name] = card;
+  try {
+    const card = buildCard(st);
+    (st.kind === "water" ? waterWrap : rainWrap).appendChild(card);
+    cards[st.name] = card;
+  } catch (e) {
+    const errCard = document.createElement("div");
+    errCard.className = "card";
+    errCard.innerHTML = `<h3>${st.name}</h3><div class="status error">表示エラー: ${e.message}</div>`;
+    (st.kind === "water" ? waterWrap : rainWrap).appendChild(errCard);
+    console.error(st.name, e);
+  }
 });
 
 // --- CSV取得・パース ---
@@ -374,7 +382,9 @@ async function loadStation(station, weekKey) {
 
 function loadAll() {
   const weekKey = weekSelect.value;
-  STATIONS.forEach((st) => loadStation(st, weekKey));
+  STATIONS.forEach((st) => {
+    if (cards[st.name]) loadStation(st, weekKey);
+  });
 }
 
 weekSelect.addEventListener("change", loadAll);
