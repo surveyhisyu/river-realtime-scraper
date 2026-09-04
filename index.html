@@ -128,7 +128,7 @@
   }
   .card canvas {
     width: 100% !important;
-    height: 150px !important;
+    height: 170px !important;
   }
   .card .status {
     font-size: 0.82rem;
@@ -267,16 +267,20 @@ function buildCard(station) {
   `;
   const ctx = card.querySelector("canvas").getContext("2d");
   const color = station.kind === "water" ? "#1c5d8c" : "#2b8fa3";
+  const isRain = station.kind === "rain";
   const chart = new Chart(ctx, {
-    type: "line",
+    type: isRain ? "bar" : "line",
     data: { labels: [], datasets: [{
       data: [],
       borderColor: color,
-      backgroundColor: color + "22",
-      borderWidth: 1.5,
+      backgroundColor: isRain ? color : color + "22",
+      borderWidth: isRain ? 0 : 1.5,
+      borderRadius: isRain ? 1 : 0,
+      barPercentage: isRain ? 1.0 : undefined,
+      categoryPercentage: isRain ? 1.0 : undefined,
       pointRadius: 0,
       spanGaps: false,
-      tension: 0.15,
+      tension: isRain ? 0 : 0.15,
       fill: station.kind === "water",
     }]},
     options: {
