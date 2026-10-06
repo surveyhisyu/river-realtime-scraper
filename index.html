@@ -130,6 +130,34 @@
     width: 100% !important;
     height: 260px !important;
   }
+  .card .table-wrap {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .card table th, .card table td {
+    padding: 4px 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .card table th:first-child, .card table td:first-child {
+    text-align: left;
+  }
+  .card table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card);
+  }
+  .card table td.empty {
+    color: var(--ink-soft);
+  }
   .card .status {
     font-size: 0.82rem;
     color: var(--ink-soft);
@@ -141,6 +169,7 @@
     margin-top: 10px;
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
   }
   .card .foot button {
     font-size: 0.78rem;
@@ -262,8 +291,17 @@ function buildCard(station) {
     <h3>${station.name}${station.closesInWinter ? " ★" : ""}</h3>
     <div class="latest">— <span class="unit">${station.unit}</span></div>
     <div class="latest-time">&nbsp;</div>
-    <div class="chart-wrap"><canvas></canvas></div>
-    <div class="foot"><button type="button">CSVをダウンロード</button></div>
+    <div class="chart-wrap" style="display:none"><canvas></canvas></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日時</th><th>値(${station.unit})</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="foot">
+      <button type="button" class="toggle-view">グラフで見る</button>
+      <button type="button" class="download">CSVをダウンロード</button>
+    </div>
   `;
   const ctx = card.querySelector("canvas").getContext("2d");
   const color = station.kind === "water" ? "#1c5d8c" : "#2b8fa3";
@@ -301,7 +339,32 @@ function buildCard(station) {
   card._chart = chart;
   card._latestEl = card.querySelector(".latest");
   card._latestTimeEl = card.querySelector(".latest-time");
-  card._downloadBtn = card.querySelector(".foot button");
+  card._downloadBtn = card.querySelector(".download");
+  card._toggleBtn = card.querySelector(".toggle-view");
+  card._chartWrap = card.querySelector(".chart-wrap");
+  card._tableWrap = card.querySelector(".table-wrap");
+  card._tableBody = card.querySelector("tbody");
+
+  card._toggleBtn.addEventListener("click", () => {
+    const showingTable = card._tableWrap.style.display !== "none";
+    if (showingTable) {
+      // 表 → グラフ
+      card._tableWrap.style.display = "none";
+      card._chartWrap.style.display = "";
+      card._toggleBtn.textContent = "表で見る";
+      // 非表示の間にサイズが取れていないことがあるため、表示後に再計算する
+      requestAnimationFrame(() => {
+        card._chart.resize();
+        card._chart.update();
+      });
+    } else {
+      // グラフ → 表
+      card._tableWrap.style.display = "";
+      card._chartWrap.style.display = "none";
+      card._toggleBtn.textContent = "グラフで見る";
+    }
+  });
+
   return card;
 }
 
@@ -338,6 +401,18 @@ function parseCsv(text) {
   return { labels, values, rawText: clean };
 }
 
+function renderTable(card, labels, values) {
+  const rowsHtml = [];
+  // 新しい時刻が上に来るように逆順で表示
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const v = values[i];
+    rowsHtml.push(
+      `<tr><td>${labels[i]}</td><td${v === null ? ' class="empty"' : ""}>${v === null ? "—" : v}</td></tr>`
+    );
+  }
+  card._tableBody.innerHTML = rowsHtml.join("");
+}
+
 async function loadStation(station, weekKey) {
   const card = cards[station.name];
   const encoded = encodeURIComponent(station.name);
@@ -346,6 +421,7 @@ async function loadStation(station, weekKey) {
   card._chart.data.labels = [];
   card._chart.data.datasets[0].data = [];
   card._chart.update();
+  card._tableBody.innerHTML = "";
   card._latestEl.innerHTML = `— <span class="unit">${station.unit}</span>`;
   card._latestTimeEl.textContent = "読み込み中…";
   card._downloadBtn.disabled = true;
@@ -360,6 +436,7 @@ async function loadStation(station, weekKey) {
     card._chart.data.labels = labels;
     card._chart.data.datasets[0].data = values;
     card._chart.update();
+    renderTable(card, labels, values);
 
     let lastIdx = -1;
     for (let i = values.length - 1; i >= 0; i--) {
